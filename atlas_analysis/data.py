@@ -1,10 +1,30 @@
 from typing import List
 from pathlib import Path
+import logging
 
 import pandas as pd
 import numpy as np
+from deft_hep.helper import convert_hwu_to_numpy
 
-import logging
+
+LO_XSEC = 4.584e2  # 4.584 +- 0.003 from https://arxiv.org/abs/1405.0301
+NNLO_XSEC = 831.76  # from https://twiki.cern.ch/twiki/bin/view/LHCPhysics/TtbarNNLO
+k_factor = NNLO_XSEC / LO_XSEC
+
+
+def collect_MC_data(files: List[Path], ctg_values: List[float]) -> List[np.ndarray]:
+    # mttbar_bin_left = [325, 500, 700, 1000]
+    # mttbar_bin_right = [500, 700, 1000, 2000]
+    mttbar_bin_widths = np.array([175] * 3 + [200] * 4 + [300] * 5 + [1000] * 3)
+
+    mc_data = []
+    for f in files:
+        bin_left, bin_right, values = convert_hwu_to_numpy(f, 15)
+
+        scaled_values = values / (bin_right - bin_left) / mttbar_bin_widths * k_factor
+
+        mc_data.append(scaled_values)
+    return bin_left, bin_right, mc_data
 
 
 def extract_data(filename: Path) -> np.array:
