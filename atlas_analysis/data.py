@@ -13,9 +13,11 @@ k_factor = NNLO_XSEC / LO_XSEC
 
 
 def collect_MC_data(files: List[Path], ctg_values: List[float]) -> List[np.ndarray]:
-    # mttbar_bin_left = [325, 500, 700, 1000]
-    # mttbar_bin_right = [500, 700, 1000, 2000]
+
     mttbar_bin_widths = np.array([175] * 3 + [200] * 4 + [300] * 5 + [1000] * 3)
+
+    if not files:
+        raise Exception("No files available")
 
     mc_data = []
     for f in files:
@@ -130,4 +132,4 @@ def _read_cov_matrix(path: Path, width: int, height: int) -> np.ndarray:
             f"File does not have correct number of values [{width*height}]"
         )
 
-    return cov_data.reshape((height, width))
+    return cov_data.reshape((width, height)).T
