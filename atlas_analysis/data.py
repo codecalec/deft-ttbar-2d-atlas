@@ -2,28 +2,52 @@ from typing import List
 from pathlib import Path
 import logging
 
-import pandas as pd
 import numpy as np
 from deft_hep.helper import convert_hwu_to_numpy
 
+LO_PATH = Path(
+    "/home/agv/Documents/Honours_Project/MG5_aMC_v2_9_3/ttbar_smeft_zero/Events/run_01_LO/MADatNLO.HwU"
+)
+NLO_PATH = Path(
+    "/home/agv/Documents/Honours_Project/MG5_aMC_v2_9_3/ttbar_smeft_zero/Events/run_02/MADatNLO.HwU"
+)
 
-LO_XSEC = 4.584e2  # 4.584 +- 0.003 from https://arxiv.org/abs/1405.0301
+NLO_XSEC = 6.741e2  #  +- 0.023e2 from https://arxiv.org/abs/1405.0301
 NNLO_XSEC = 831.76  # from https://twiki.cern.ch/twiki/bin/view/LHCPhysics/TtbarNNLO
-k_factor = NNLO_XSEC / LO_XSEC
+NLO_TO_NNLO_k_factor = NNLO_XSEC / NLO_XSEC
 
 
-def collect_MC_data(files: List[Path], ctg_values: List[float]) -> List[np.ndarray]:
+def k_factor(LO_path: Path, NLO_path: Path):
+
+    _, _, LO_values = convert_hwu_to_numpy(LO_path, 15)
+    _, _, NLO_values = convert_hwu_to_numpy(NLO_path, 15)
+
+    k = NLO_values / LO_values
+
+    print(f"Using k-factor: {k}")
+    return k
+
+
+def collect_MC_data(files: List[Path]) -> List[np.ndarray]:
 
     mttbar_bin_widths = np.array([175] * 3 + [200] * 4 + [300] * 5 + [1000] * 3)
 
     if not files:
         raise Exception("No files available")
 
+    k = k_factor(LO_PATH, NLO_PATH)
+
     mc_data = []
     for f in files:
         bin_left, bin_right, values = convert_hwu_to_numpy(f, 15)
 
-        scaled_values = values / (bin_right - bin_left) / mttbar_bin_widths * k_factor
+        scaled_values = (
+            values
+            / (bin_right - bin_left)
+            / mttbar_bin_widths
+            * k
+            * NLO_TO_NNLO_k_factor
+        )
 
         mc_data.append(scaled_values)
     return bin_left, bin_right, mc_data
