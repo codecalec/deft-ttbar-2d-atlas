@@ -17,7 +17,7 @@ def generate_json_ctg(
     output_dict = {
         "config": {
             "run_name": "ATLAS-ctg",
-            "data": {"observable": "$m_{t\\bar{t}}$"},
+            "data": {"observable": "$p_{t}^{T}$"},
             "model": {
                 "input": "numpy",
                 "inclusive_k_factor": 1,
@@ -32,7 +32,7 @@ def generate_json_ctg(
     test_output_dict = {
         "config": {
             "run_name": "ATLAS-ctg",
-            "data": {"observable": "$m_{t\\bar{t}}$"},
+            "data": {"observable": "$p_{t}^{T}$"},
             "model": {
                 "input": "numpy",
                 "inclusive_k_factor": 1,
@@ -98,7 +98,7 @@ def generate_json_multiple(
             "model": {
                 "input": "numpy",
             },
-            "fit": {"n_burnin": 500, "n_total": 6000, "n_walkers": 10},
+            "fit": {"n_burnin": 500, "n_total": 20000, "n_walkers": 10},
         }
     }
     predictions = [mc.tolist() for mc in MC_signal]
@@ -122,8 +122,9 @@ def generate_json_multiple(
     with open(filename, "w") as f:
         json.dump(output_dict, f, indent=4)
 
+
 def generate_json_three_op(
-    data:np.ndarray,
+    data: np.ndarray,
     covariance: List[List[float]],
     MC_signal: List[np.ndarray],
     k_factor: Union[float, List[np.ndarray]],
@@ -137,11 +138,11 @@ def generate_json_three_op(
     output_dict = {
         "config": {
             "run_name": "ATLAS-ctg-ctp-ctq8",
-            "data": {"observable": "$m_{t\\bar{t}}$"},
+            "data": {"observable": "$p_{t}^{T}$"},
             "model": {
                 "input": "numpy",
             },
-            "fit": {"n_burnin": 500, "n_total": 50000, "n_walkers": 10},
+            "fit": {"n_burnin": 1000, "n_total": 40000, "n_walkers": 10},
         }
     }
     predictions = [mc.tolist() for mc in MC_signal]
@@ -150,15 +151,18 @@ def generate_json_three_op(
 
     output_dict["config"]["data"]["covariance_matrix"] = covariance.tolist()
 
-    samples = [[1, ctp, ctg, ctq] for ctp, ctg, ctq in itertools.product(ctp_list, ctg_list, ctq8_list)]
+    samples = [
+        [1, ctp, ctg, ctq]
+        for ctp, ctg, ctq in itertools.product(ctp_list, ctg_list, ctq8_list)
+    ]
     output_dict["config"]["model"]["samples"] = samples
 
     predictions = [mc.tolist() for mc in MC_signal]
     output_dict["config"]["model"]["predictions"] = predictions
     output_dict["config"]["model"]["prior_limits"] = {
-        r"c_{t\phi}": [-2.0, 2.0],
-        "c_{tG}": [-2.0, 2.0],
-        "c_{Qt}^{8}": [-1.0, 1.0],
+        r"c_{t\phi}": [-4.0, 4.0],
+        "c_{tG}": [-4.0, 4.0],
+        "c_{tq}^{8}": [-4.0, 4.0],
     }
 
     output_dict["config"]["model"]["inclusive_k_factor"] = k_factor

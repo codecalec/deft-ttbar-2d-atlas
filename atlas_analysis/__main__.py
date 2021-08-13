@@ -1,9 +1,16 @@
 from pathlib import Path
+from typing import List
 import logging
 from config import *
-from data import extract_data, cov_matrix, collect_MC_data
-from analysis import run_analysis
-from plot import plot_comparison, plot_comparison_multiple_operator
+from data import (
+    extract_data,
+    cov_matrix,
+    collect_MC_data,
+    NLO_TO_NNLO_k_factor,
+    k_factor,
+)
+from analysis import run_analysis, run_validation
+from plot import plot_comparison, plot_comparison_multiple_operator, data_plot
 
 import numpy as np
 import deft_hep as deft
@@ -13,15 +20,76 @@ from matplotlib import rcParams, axes
 plt.style.use("science")
 rcParams["savefig.dpi"] = 200
 
+PROJECT_PATH = Path("/home/agv/Documents/Honours_Project")
+DATA_PATH = PROJECT_PATH / "data/1908.07305"
+DATA_GEN_PATH = PROJECT_PATH / "data_generation"
+MC_PATH_CTG = DATA_GEN_PATH / "atlas_ttbar_2D"
+MC_PATH_MULTIPLE = DATA_GEN_PATH / "atlas_ttbar_2D_multiple"
+MC_PATH_THREE_OP = DATA_GEN_PATH / "atlas_ttbar_2D_all"
+MC_PATH_THREE_OP_VALID = DATA_GEN_PATH / "atlas_ttbar_2D_all_validation"
 
-DATA_PATH = Path("/home/agv/Documents/Honours_Project/data/1908.07305")
-MC_PATH_CTG = Path("/home/agv/Documents/Honours_Project/data_generation/atlas_ttbar_2D")
-MC_PATH_MULTIPLE = Path(
-    "/home/agv/Documents/Honours_Project/data_generation/atlas_ttbar_2D_multiple"
-)
-MC_PATH_THREE_OP = Path(
-    "/home/agv/Documents/Honours_Project/data_generation/atlas_ttbar_2D_all"
-)
+MC_PATH_OP_COMPARISON = DATA_GEN_PATH / "atlas_ttbar_2D_single_op"
+MC_PATH_SM = DATA_GEN_PATH / "atlas_ttbar_2D_sm"
+
+
+def operator_comparison(
+    sm_path: Path,
+    ctp_paths: List[Path],
+    ctg_paths: List[Path],
+    ctq_paths: List[Path],
+    data: np.ndarray,
+    covariance: np.ndarray,
+):
+    sm_data = collect_MC_data([sm_path])[2][0]  # get sm data as ndarray
+    x = np.arange(0, len(sm_data))
+
+    ctp_data = collect_MC_data(ctp_paths)[2]
+    ctg_data = collect_MC_data(ctg_paths)[2]
+    ctq_data = collect_MC_data(ctq_paths)[2]
+    c_values = [-2, 2]
+
+    for datasets, c, label in zip(
+        [ctp_data, ctg_data, ctq_data],
+        ["ctp", "ctg", "ctq"],
+        [r"$C_{t\phi}$", r"$C_{tG}$", r"$C_{tq}$"],
+    ):
+        filename = f"data_plot_{c}.png"
+        data_plot(
+            data,
+            covariance,
+            [
+                *[
+                    (x, label + f"={str(value)}")
+                    for x, value in zip(datasets, c_values)
+                ],
+                (sm_data, "MG5@LO SM"),
+            ],
+            filename=filename
+        )
+
+    # indices = [6, 7, 8, 9, 10, 11, 12, 13, 14]
+    # # indices= np.arange(15)
+    # data_err = np.sqrt(np.diag(covariance))
+    # z = (sm_data[indices] - data[indices]) / data_err[indices]
+    # print("z", z)
+
+    # for data_list, label in zip([ctp_data, ctg_data, ctq_data], ["ctp", "ctg", "ctq"]):
+    # for y, value in zip(data_list, c_values):
+    # plt.scatter(
+    # x[indices], y[indices], marker="_", label=f"MG5 {label}={value}"
+    # )
+
+    # plt.scatter(x[indices], sm_data[indices], marker="_", label="MG5 sm")
+    # plt.errorbar(
+    # x[indices],
+    # data[indices],
+    # fmt=".k",
+    # yerr=data_err[indices],
+    # label="ATLAS data",
+    # )
+    # plt.ylabel(r"$\partial^2 \sigma / \partial m_{t\bar{t}} \partial p_{t}^{T}$")
+    # plt.legend()
+    # plt.show()
 
 
 def ctg_analysis(data_values, values_cov):
@@ -69,21 +137,17 @@ def ctg_analysis(data_values, values_cov):
     plt.savefig("ATLAS_MC_multi_comparison.png")
     plt.close()
 
-    # Just take first 3x3
-    # data_values = data_values[:3]
-    # values_cov = values_cov[:3,:3]
-    # mc_data = [a[:3] for a in mc_data]
-
-    # Just take second 4x4
-    # data_values = data_values[12:]
-    # values_cov = values_cov[12:, 12:]
-    # mc_data = [a[12:] for a in mc_data]
+    # data_values = data_values[5:]
+    # values_cov = values_cov[5:,5:]
+    # mc_data = [a[5:] for a in mc_data]
+    data_err = np.sqrt(np.diag(values_cov))
+    print("z", (mc_data[1] - data_values) / data_err)
 
     from scipy.linalg import block_diag
 
-    data_values = np.append(data_values[:3], data_values[12:])
-    values_cov = block_diag(values_cov[:3, :3], values_cov[12:, 12:])
-    mc_data = [np.append(a[:3], a[12:]) for a in mc_data]
+    # data_values = np.append(data_values[:2], data_values[3:])
+    # values_cov = block_diag(values_cov[:2, :2], values_cov[3:, 3:])
+    # mc_data = [np.append(a[:2], a[3:]) for a in mc_data]
     print(data_values)
     print(values_cov)
     print(mc_data)
@@ -117,18 +181,30 @@ def multiple_analysis(data, covariance):
     )
     run_analysis(Path("atlas_2D_multiple.json"))
 
+
 def three_op_analysis(data, covariance):
     mc_files = sorted(MC_PATH_THREE_OP.glob("run_??_LO/MADatNLO.HwU"))
-    ctg_values = [-2.0, 0.0001, 2.0]
-    ctp_values = [-2.0, 0.0001, 2.0]
-    ctq8_values = [-2.0, 0.0001, 2.0]
+    assert len(mc_files) == 27
     bin_left, bin_right, mc_data = collect_MC_data(mc_files)
+
+    ctp_values = [-2.0, 0.0001, 2.0]
+    ctg_values = [-2.0, 0.0001, 2.0]
+    ctq8_values = [-2.0, 0.0001, 2.0]
 
     k = 1
 
-    # data = data[-8:]
-    # covariance = covariance[-8:,-8:]
-    # mc_data = [a[-8:] for a in mc_data]
+    # indices = [6,11,12,13,14]
+    # indices = [6,9,10,11,12,13,14]
+    # indices = [6,10,11,12,13,14]
+    # When no 6, double solution
+    # indices = [6, 7, 8, 9, 10, 11, 12, 13, 14]
+    # indices = [7, 8, 9, 10, 11, 12, 13, 14]
+    indices = [0,1,2,3,4,5,6,7,8,9,10]
+    # indices = [0,1,3,5,6,7,9,10,11,12,14]
+    # data = data[indices]
+    # covariance = covariance[indices][:, indices]
+    # mc_data = [a[indices] for a in mc_data]
+
     # covariance = np.diag(np.diagonal(covariance))
 
     generate_json_three_op(
@@ -142,6 +218,28 @@ def three_op_analysis(data, covariance):
         filename=Path("atlas_2D_three_op.json"),
     )
     run_analysis(Path("atlas_2D_three_op.json"))
+
+    validation_files = sorted(MC_PATH_THREE_OP_VALID.glob("run_??_LO/MADatNLO.HwU"))
+    assert len(validation_files) == 8
+    bin_left, bin_right, valid_data = collect_MC_data(validation_files)
+    # valid_data = [a[indices] for a in valid_data]
+
+    ctg_values = [-1.0, 1.0]
+    ctp_values = [-1.0, 1.0]
+    ctq8_values = [-1.0, 1.0]
+
+    generate_json_three_op(
+        data,
+        covariance,
+        valid_data,
+        k,
+        ctp_values,
+        ctg_values,
+        ctq8_values,
+        filename=Path("atlas_2D_three_op_test.json"),
+    )
+
+    # run_validation(Path("atlas_2D_three_op.json"), Path("atlas_2D_three_op_test.json"))
 
 
 if __name__ == "__main__":
@@ -174,3 +272,14 @@ if __name__ == "__main__":
     # multiple_analysis(data_values, values_cov)
 
     # ctg_analysis(data_values, values_cov)
+
+    # comparison_paths = list(MC_PATH_OP_COMPARISON.glob("run_??_LO/MADatNLO.HwU"))
+    # assert len(comparison_paths) == 6
+    # ctp_paths = comparison_paths[:2]
+    # ctg_paths = comparison_paths[2:4]
+    # ctq_paths = comparison_paths[4:]
+
+    # sm_path = list(MC_PATH_SM.glob("run_??_LO/MADatNLO.HwU"))[0]
+    # operator_comparison(
+        # sm_path, ctp_paths, ctg_paths, ctq_paths, data_values, values_cov
+    # )
