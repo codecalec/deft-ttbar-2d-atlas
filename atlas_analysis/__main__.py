@@ -1,4 +1,5 @@
 from pathlib import Path
+import re
 from typing import List
 import logging
 from config import *
@@ -64,7 +65,8 @@ def operator_comparison(
                 ],
                 (sm_data, "MG5@LO SM"),
             ],
-            filename=filename
+            filename=filename,
+            ratio=True,
         )
 
     # indices = [6, 7, 8, 9, 10, 11, 12, 13, 14]
@@ -187,20 +189,21 @@ def three_op_analysis(data, covariance):
     assert len(mc_files) == 27
     bin_left, bin_right, mc_data = collect_MC_data(mc_files)
 
-    ctp_values = [-2.0, 0.0001, 2.0]
-    ctg_values = [-2.0, 0.0001, 2.0]
-    ctq8_values = [-2.0, 0.0001, 2.0]
+    ctp_values = [-2.0, 0, 2.0]
+    ctg_values = [-2.0, 0, 2.0]
+    ctq8_values = [-2.0, 0, 2.0]
 
     k = 1
 
-    # indices = [6,11,12,13,14]
-    # indices = [6,9,10,11,12,13,14]
+    # indices = [12,13,14]
+    # indices = [3,4,5,6,7,8,9,10,11,12,13,14]
     # indices = [6,10,11,12,13,14]
     # When no 6, double solution
-    # indices = [6, 7, 8, 9, 10, 11, 12, 13, 14]
     # indices = [7, 8, 9, 10, 11, 12, 13, 14]
-    indices = [0,1,2,3,4,5,6,7,8,9,10]
+    # indices = [7, 8, 9, 10, 11, 12, 13, 14]
+    # indices = [0,1,2,3,4,5,6,7,8,9,10]
     # indices = [0,1,3,5,6,7,9,10,11,12,14]
+    # indices = [3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14]
     # data = data[indices]
     # covariance = covariance[indices][:, indices]
     # mc_data = [a[indices] for a in mc_data]
@@ -242,6 +245,26 @@ def three_op_analysis(data, covariance):
     # run_validation(Path("atlas_2D_three_op.json"), Path("atlas_2D_three_op_test.json"))
 
 
+def ctg_ctq_analysis(data, covariance):
+
+    mc_files = sorted(MC_PATH_THREE_OP.glob(r"run_1[0-8]_LO/MADatNLO.HwU"))
+    assert len(mc_files) == 9
+    bin_left, bin_right, mc_data = collect_MC_data(mc_files)
+
+    # covariance = np.diag(np.diagonal(covariance))
+
+    generate_json_ctg_ctq(
+        data,
+        covariance,
+        mc_data,
+        k_factor=1,
+        ctg_list=[-2.0, 0.0, 2.0],
+        ctq8_list=[-2.0, 0.0, 2.0],
+        filename=Path("atlas_2D_ctg_ctq.json"),
+    )
+    run_analysis(Path("atlas_2D_ctg_ctq.json"))
+
+
 if __name__ == "__main__":
 
     logging.basicConfig(filename="analysis.log", encoding="utf-8", level=logging.DEBUG)
@@ -267,7 +290,9 @@ if __name__ == "__main__":
 
     logging.debug(f"Covariance Matrix:\n{values_cov}\n{values_cov.shape}")
 
-    three_op_analysis(data_values, values_cov)
+    ctg_ctq_analysis(data_values, values_cov)
+
+    # three_op_analysis(data_values, values_cov)
 
     # multiple_analysis(data_values, values_cov)
 
@@ -281,5 +306,5 @@ if __name__ == "__main__":
 
     # sm_path = list(MC_PATH_SM.glob("run_??_LO/MADatNLO.HwU"))[0]
     # operator_comparison(
-        # sm_path, ctp_paths, ctg_paths, ctq_paths, data_values, values_cov
+    # sm_path, ctp_paths, ctg_paths, ctq_paths, data_values, values_cov
     # )

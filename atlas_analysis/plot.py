@@ -84,7 +84,8 @@ def data_plot(
     atlas_data: np.ndarray,
     atlas_cov: np.ndarray,
     other_hists: List[Tuple[np.ndarray, str]],
-    filename: Optional[Union[str, Path]] = None
+    filename: Optional[Union[str, Path]] = None,
+    ratio: bool = False,
 ):
 
     bins_1 = [(0, 90), (90, 180), (180, 1000)]
@@ -92,7 +93,18 @@ def data_plot(
     bins_3 = [(0, 80), (80, 170), (170, 270), (270, 370), (370, 1000)]
     bins_4 = [(0, 180), (180, 280), (280, 1000)]
 
-    fig, (ax1, ax2, ax3, ax4) = plt.subplots(1, 4, figsize=(9.5, 3.5), sharey=True)
+    if ratio:
+        fig, ((ax1, ax2, ax3, ax4), (ax1r, ax2r, ax3r, ax4r)) = plt.subplots(
+            2,
+            4,
+            figsize=(9.5, 3.5),
+            sharey="row",
+            sharex="col",
+            gridspec_kw={"height_ratios": [3, 1]},
+        )
+        ax1r.set_ylabel("Ratio")
+    else:
+        fig, (ax1, ax2, ax3, ax4) = plt.subplots(1, 4, figsize=(9.5, 3.5), sharey=True)
     fig.subplots_adjust(hspace=0, wspace=0)
     # ax1.set_title(r"$\bf{ATLAS}$", loc="left")
     # ax1.set_title(r"$\sqrt{s}=13\mathrm{TeV}, 36.1\mathrm{fb}^{-1}$", loc="right")
@@ -167,6 +179,7 @@ def data_plot(
         yerr=atlas_err[12:],
         fmt=".k",
     )
+
     for hist_data, label in other_hists:
         ax1.errorbar(
             centres_1,
@@ -197,7 +210,76 @@ def data_plot(
             linestyle="None",
         )
 
-    fig.legend(bbox_to_anchor=(0.9, 0.8), loc='upper left')
+        if ratio:
+            for axr in [ax1r, ax2r, ax3r, ax4r]:
+                axr.axhline(1.0,ls="-", color="k")
+
+            ax1r.errorbar(
+                centres_1,
+                [1] * 3,
+                yerr=atlas_err[:3] / hist_data[:3],
+                linestyle="None",
+                fmt="k",
+            )
+
+            # breakpoint()
+            # ax1r.fill_between(
+                # [x2 for (_, x2) in bins_1].insert(0,0),
+                # y1=np.append(0.0, atlas_err[:3] / hist_data[:3]),
+                # y2=np.append(0.0, - atlas_err[:3] / hist_data[:3]),
+                # color="r",
+            # )
+
+            ax1r.errorbar(
+                centres_1,
+                atlas_data[:3] / hist_data[:3],
+                xerr=widths_1 / 2,
+                linestyle="None",
+            )
+
+            ax2r.errorbar(
+                centres_2,
+                [1] * 4,
+                yerr=atlas_err[3:7] / hist_data[3:7],
+                linestyle="None",
+                fmt="k",
+            )
+            ax2r.errorbar(
+                centres_2,
+                atlas_data[3:7] / hist_data[3:7],
+                xerr=widths_2 / 2,
+                linestyle="None",
+            )
+
+            ax3r.errorbar(
+                centres_3,
+                [1] * 5,
+                yerr=atlas_err[7:12] / hist_data[7:12],
+                linestyle="None",
+                fmt="k",
+            )
+            ax3r.errorbar(
+                centres_3,
+                atlas_data[7:12] / hist_data[7:12],
+                xerr=widths_3 / 2,
+                linestyle="None",
+            )
+
+            ax4r.errorbar(
+                centres_4,
+                [1] * 3,
+                yerr=atlas_err[12:] / hist_data[12:],
+                linestyle="None",
+                fmt="k",
+            )
+            ax4r.errorbar(
+                centres_4,
+                atlas_data[12:] / hist_data[12:],
+                xerr=widths_4 / 2,
+                linestyle="None",
+            )
+
+    fig.legend(bbox_to_anchor=(0.9, 0.8), loc="upper left")
     if filename:
         plt.savefig(filename, bbox_inches="tight")
     else:

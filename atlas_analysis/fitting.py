@@ -5,10 +5,10 @@ import numpy as np
 from deft_hep import ConfigReader, PredictionBuilder
 
 
-def _min_func(c: np.ndarray, pb: PredictionBuilder, data: np.ndarray, icov: np.ndarray):
+def min_func(c: np.ndarray, pb: PredictionBuilder, data: np.ndarray, icov: np.ndarray):
     pred = pb.make_prediction(c)
     diff = pred - data
-    return np.dot(diff, np.dot(icov, diff)) + len(data) * np.log(1 / np.linalg.det(icov))
+    return np.dot(diff, np.dot(icov, diff))
 
 
 def find_minimum(
@@ -24,12 +24,11 @@ def find_minimum(
 
     if initial_c is None:
         initial_c = np.random.random(pb.nOps) - 0.5
-        # initial_c = [-1.51,-1.09,-0.65]
 
     bounds = list(config.prior_limits.values())
     icov = np.linalg.inv(covariance)
     result = minimize(
-        _min_func,
+        min_func,
         initial_c,
         args=(pb, data, icov),
         bounds=bounds,
