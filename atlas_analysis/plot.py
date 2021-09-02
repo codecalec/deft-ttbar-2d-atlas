@@ -212,7 +212,7 @@ def data_plot(
 
         if ratio:
             for axr in [ax1r, ax2r, ax3r, ax4r]:
-                axr.axhline(1.0,ls="-", color="k")
+                axr.axhline(1.0, ls="-", color="k")
 
             ax1r.errorbar(
                 centres_1,
@@ -224,10 +224,10 @@ def data_plot(
 
             # breakpoint()
             # ax1r.fill_between(
-                # [x2 for (_, x2) in bins_1].insert(0,0),
-                # y1=np.append(0.0, atlas_err[:3] / hist_data[:3]),
-                # y2=np.append(0.0, - atlas_err[:3] / hist_data[:3]),
-                # color="r",
+            # [x2 for (_, x2) in bins_1].insert(0,0),
+            # y1=np.append(0.0, atlas_err[:3] / hist_data[:3]),
+            # y2=np.append(0.0, - atlas_err[:3] / hist_data[:3]),
+            # color="r",
             # )
 
             ax1r.errorbar(

@@ -1,4 +1,4 @@
-from typing import List
+from typing import List, Tuple
 from pathlib import Path
 import logging
 
@@ -31,7 +31,9 @@ k_factor = _per_bin_k_factor(LO_PATH, NLO_PATH) * NLO_TO_NNLO_k_factor
 print("k factor", k_factor)
 
 
-def collect_MC_data(files: List[Path]) -> List[np.ndarray]:
+def collect_MC_data(
+    files: List[Path],
+) -> Tuple[np.ndarray, np.ndarray, List[np.ndarray]]:
 
     mttbar_bin_widths = np.array([175] * 3 + [200] * 4 + [300] * 5 + [1000] * 3)
 
@@ -152,3 +154,13 @@ def _read_cov_matrix(path: Path, width: int, height: int) -> np.ndarray:
         )
 
     return cov_data.reshape((width, height)).T
+
+
+def verify_cov_matrix(cov: np.ndarray) -> np.ndarray:
+    from itertools import product
+
+    err = np.sqrt(np.diag(cov))
+    result = np.empty(cov.shape)
+    for (i, err_i), (j, err_j) in product(enumerate(err), enumerate(err)):
+        result[i, j] = cov[i, j] / (err_i * err_j)
+    return result

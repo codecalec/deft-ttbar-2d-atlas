@@ -1,5 +1,4 @@
 from pathlib import Path
-import re
 from typing import List
 import logging
 from config import *
@@ -7,6 +6,7 @@ from data import (
     extract_data,
     cov_matrix,
     collect_MC_data,
+    verify_cov_matrix,
     NLO_TO_NNLO_k_factor,
     k_factor,
 )
@@ -14,9 +14,8 @@ from analysis import run_analysis, run_validation
 from plot import plot_comparison, plot_comparison_multiple_operator, data_plot
 
 import numpy as np
-import deft_hep as deft
 import matplotlib.pyplot as plt
-from matplotlib import rcParams, axes
+from matplotlib import rcParams
 
 plt.style.use("science")
 rcParams["savefig.dpi"] = 200
@@ -42,7 +41,6 @@ def operator_comparison(
     covariance: np.ndarray,
 ):
     sm_data = collect_MC_data([sm_path])[2][0]  # get sm data as ndarray
-    x = np.arange(0, len(sm_data))
 
     ctp_data = collect_MC_data(ctp_paths)[2]
     ctg_data = collect_MC_data(ctg_paths)[2]
@@ -187,7 +185,11 @@ def multiple_analysis(data, covariance):
 def three_op_analysis(data, covariance):
     mc_files = sorted(MC_PATH_THREE_OP.glob("run_??_LO/MADatNLO.HwU"))
     assert len(mc_files) == 27
-    bin_left, bin_right, mc_data = collect_MC_data(mc_files)
+    _, _, mc_data = collect_MC_data(mc_files)
+
+    validation_files = sorted(MC_PATH_THREE_OP_VALID.glob("run_??_LO/MADatNLO.HwU"))
+    assert len(validation_files) == 8
+    _, _, valid_data = collect_MC_data(validation_files)
 
     ctp_values = [-2.0, 0, 2.0]
     ctg_values = [-2.0, 0, 2.0]
@@ -222,9 +224,6 @@ def three_op_analysis(data, covariance):
     )
     run_analysis(Path("atlas_2D_three_op.json"))
 
-    validation_files = sorted(MC_PATH_THREE_OP_VALID.glob("run_??_LO/MADatNLO.HwU"))
-    assert len(validation_files) == 8
-    bin_left, bin_right, valid_data = collect_MC_data(validation_files)
     # valid_data = [a[indices] for a in valid_data]
 
     ctg_values = [-1.0, 1.0]
@@ -242,7 +241,7 @@ def three_op_analysis(data, covariance):
         filename=Path("atlas_2D_three_op_test.json"),
     )
 
-    # run_validation(Path("atlas_2D_three_op.json"), Path("atlas_2D_three_op_test.json"))
+    run_validation(Path("atlas_2D_three_op.json"), Path("atlas_2D_three_op_test.json"))
 
 
 def ctg_ctq_analysis(data, covariance):
@@ -251,7 +250,7 @@ def ctg_ctq_analysis(data, covariance):
     assert len(mc_files) == 9
     bin_left, bin_right, mc_data = collect_MC_data(mc_files)
 
-    # covariance = np.diag(np.diagonal(covariance))
+    covariance = np.diag(np.diagonal(covariance))
 
     generate_json_ctg_ctq(
         data,
@@ -290,9 +289,16 @@ if __name__ == "__main__":
 
     logging.debug(f"Covariance Matrix:\n{values_cov}\n{values_cov.shape}")
 
-    ctg_ctq_analysis(data_values, values_cov)
+    # ctg_ctq_analysis(data_values, values_cov)
 
-    # three_op_analysis(data_values, values_cov)
+    result = verify_cov_matrix(values_cov)
+
+    # print(result[:3][:,:3])
+    # print(result[3:7][:,3:7])
+    # print(result[7:12][:,7:12])
+    # print(result[12:][:,12:])
+
+    three_op_analysis(data_values, values_cov)
 
     # multiple_analysis(data_values, values_cov)
 
