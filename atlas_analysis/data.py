@@ -1,6 +1,6 @@
-from typing import List, Tuple
-from pathlib import Path
 import logging
+from pathlib import Path
+from typing import List, Tuple
 
 import numpy as np
 from deft_hep.helper import convert_hwu_to_numpy
@@ -28,8 +28,25 @@ def _per_bin_k_factor(LO_path: Path, NLO_path: Path):
 
 
 k_factor = _per_bin_k_factor(LO_PATH, NLO_PATH) * NLO_TO_NNLO_k_factor
-print("k factor", k_factor)
 
+
+def scale_variation(file: Path, verbose:bool = False):
+    values = []
+
+    with open(file, "r") as f:
+        lines = f.readlines()
+        for i, line in enumerate(lines):
+            if "<histogram>" in line:
+                hist_info = lines[i+1].strip().split()
+                dy = float(hist_info[3])
+                central = float(hist_info[2])
+                variation =  (dy / 2) / central
+                assert variation < 1.
+                values.append(variation)
+    if verbose:
+        print(f"Scale variation from {file}")
+        print(values)
+    return np.array(values)
 
 def collect_MC_data(
     files: List[Path],

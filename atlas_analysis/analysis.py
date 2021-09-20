@@ -1,14 +1,12 @@
-from pathlib import Path
-import os
-from typing import Union
 import copy
+import os
+from pathlib import Path
+from typing import Union
 
-import numpy as np
 import deft_hep as deft
 import matplotlib.pyplot as plt
-
+import numpy as np
 from fitting import find_minimum, min_func
-
 from plot import data_plot  # , grid_plot
 
 
@@ -88,7 +86,9 @@ def run_analysis(config_name: Union[str, Path], closure: bool = False):
             use_multiprocessing=False,
         )
         sampler_closure = fitter_closure.sampler
-        mcmc_params_closure = np.mean(sampler_closure.get_chain(flat=True), axis=0)
+        mcmc_params_closure = np.mean(
+            sampler_closure.get_chain(flat=True), axis=0
+        )
         mcmc_params_cov_closure = np.atleast_1d(
             np.cov(np.transpose(sampler_closure.get_chain(flat=True)))
         )
@@ -123,7 +123,9 @@ def run_analysis(config_name: Union[str, Path], closure: bool = False):
     sampler = fitter.sampler
 
     print(
-        "Mean acceptance fraction: {0:.3f}".format(np.mean(sampler.acceptance_fraction))
+        "Mean acceptance fraction: {0:.3f}".format(
+            np.mean(sampler.acceptance_fraction)
+        )
     )
     print(
         "Mean autocorrelation time: {0:.3f} steps".format(
@@ -132,7 +134,9 @@ def run_analysis(config_name: Union[str, Path], closure: bool = False):
     )
 
     mcmc_params = np.mean(sampler.get_chain(flat=True), axis=0)
-    mcmc_params_cov = np.atleast_1d(np.cov(np.transpose(sampler.get_chain(flat=True))))
+    mcmc_params_cov = np.atleast_1d(
+        np.cov(np.transpose(sampler.get_chain(flat=True)))
+    )
     mcmc_params_error = (
         np.sqrt(np.diag(mcmc_params_cov))
         if len(mcmc_params_cov) != 1
@@ -146,7 +150,9 @@ def run_analysis(config_name: Union[str, Path], closure: bool = False):
     icov = np.linalg.inv(config.cov)
 
     predictions = pb.make_prediction(mcmc_params)
-    pred_zero_loc = config.samples.tolist().index([1.0] + [0.0] * (len(mcmc_params)))
+    pred_zero_loc = config.samples.tolist().index(
+        [1.0] + [0.0] * (len(mcmc_params))
+    )
     pred_zero = config.predictions[pred_zero_loc]
     # pb.make_prediction([0.0 for _ in range(len(mcmc_params))])
 
@@ -176,12 +182,20 @@ def run_analysis(config_name: Union[str, Path], closure: bool = False):
     sp.fit_result(ylabel="Diff. XSec", show_plot=False, log_scale=True)
     sp.corner(show_plot=False)
 
+    model_label = "Model Pred.\n" + "\n".join(
+        [
+            "{}={:.2f}".format(l, p)
+            for l, p in zip(config.tex_labels, mcmc_params)
+        ]
+    )
+    config.tex_labels
+
     data_plot(
         config.data,
         np.array(config.cov),
         [
-            (predictions, f"Model Pred.\n{mcmc_params}"),
-            (pred_zero, f"Zero Pred."),
+            (predictions, model_label),
+            (pred_zero, f"SM Pred."),
         ],
         filename="ATLAS_model_result.png",
         ratio=True,
@@ -189,48 +203,94 @@ def run_analysis(config_name: Union[str, Path], closure: bool = False):
 
 
 def run_validation(config_name, test_name):
-    from scipy.optimize import minimize
 
     config = deft.ConfigReader(config_name)
     pb = deft.PredictionBuilder(config)
     mv = deft.ModelValidator(pb)
 
     config_test = deft.ConfigReader(test_name)
-    samples, model_preds = mv.validate(config_test)
 
-    bounds = list(config_test.prior_limits.values())
+    pred_samples, predictions = mv.validation_predictions(config_test)
 
-    diff = model_preds - config_test.predictions
-    num_sigma = np.abs(diff) / np.sqrt(np.diag(config_test.cov))
-    does_agree = num_sigma < 1
-    print(num_sigma)
-    print(does_agree)
+    score = np.empty(len(predictions))
+    res_avg = np.empty(len(predictions))
+    for i, (model_sample, model_pred, true_sample, true_pred) in enumerate(
+        zip(
+            pred_samples,
+            predictions,
+            config_test.samples,
+            config_test.predictions,
+        )
+    ):
+        assert (model_sample == true_sample).all()
+        err = true_pred * 0.01
+        cov = np.diag(err ** 2)
+        residuals = model_pred - true_pred
+        rel_residuals = residuals / true_pred
+        agreement = np.abs(residuals) < err
 
-    # for sample, pred in zip(samples, model_preds):
-    # cov = config_test.cov  # np.diag(np.sqrt(pred))
-    # icov = np.linalg.inv(cov)  # use poisson erros
-    # initial_c = (
-    # sample[1:] + (np.random.random(len(sample[1:])) - 0.5) * 1.2
-    # )
-    # result = minimize(
-    # min_func,
-    # initial_c,
-    # args=(pb, pred, icov),
-    # bounds=bounds,
-    # )
-    # c = result.x
-    # c_cov = result.hess_inv.todense()
-    # c_err = np.sqrt(np.diag(c_cov))
-    # print(c, c_cov, sample)
-    # print(c_err)
-    # print(
-    # "Agrees:",
-    # (c - c_err < sample[1:]).all() and (sample[1:] < c + c_err).all(),
-    # )
+        # data_plot(
+        # true_pred,
+        # cov,
+        # other_hists=[(model_pred, f"model {model_sample}")],
+        # filename=f"./results/validation_{config.run_name}_{i}.png",
+        # ratio=True,
+        # data_label=f"MG5 {true_sample}",
+        # )
 
-    # fig, axs = plt.subplots(len(predictions)
-    # for model_pred, mc_pred in zip(predictions, config_test.predictions):
-    # plt.plot(range(len(model_pred)), model_pred, ".b", label="Model")
-    # plt.plot(range(len(mc_pred)), mc_pred, ".r", label="MC")
-    # plt.legend()
-    # plt.show()
+        # x = range(len(model_pred))
+        # plt.scatter(x, model_pred, marker=".")
+        # plt.errorbar(x, true_pred, yerr=err, ls="None")
+        # plt.title("{}".format(true_sample))
+        # plt.show()
+
+        # plt.errorbar(x, [1] * len(model_pred), yerr=(err / 2) / true_pred, ls="None")
+        # plt.scatter(x, model_pred / true_pred, marker=".")
+        # plt.show()
+
+        res_avg[i] = rel_residuals.mean()
+        score[i] = agreement.sum()
+        print(
+            "Sample:",
+            model_sample,
+            "Agree Score:",
+            agreement.sum(),
+            "Failed bins:",
+            np.where(agreement == False)[0],
+        )
+    print(
+        "Percentage:",
+        score.mean() / len(predictions[0]),
+        "+-",
+        score.std() / len(predictions[0]),
+    )
+
+    from scipy.optimize import curve_fit
+
+    gaus_func = (
+        lambda x, A, mean, std: A
+        * (1 / (std * (np.sqrt(2 * np.pi))))
+        * (np.exp((-1.0 / 2.0) * (((x - mean) / std) ** 2)))
+    )
+    hist, edges = np.histogram(res_avg, bins=11, range=(-0.06, 0.06))
+    centres = (edges[1:] + edges[:-1]) / 2
+    p0 = [1, 0, 0.1]
+    popt, pcov = curve_fit(f=gaus_func, xdata=centres, ydata=hist, p0=p0)
+    print(popt, pcov)
+    print(np.sqrt(np.diag(pcov)))
+
+    fig = plt.figure(figsize=(3, 4))
+    ax = fig.gca()
+    x = np.linspace(-0.06, 0.06, 100)
+    ax.hist(res_avg, bins=11, range=(-0.06, 0.06))
+    ax.plot(x, gaus_func(x,*popt), "--k")
+    ax.set_xlabel("Avg. Residuals")
+    ax.set_ylabel("Num. Valid. tests")
+    ax.text(-0.05, 25, "Mean={:.4f}\nStd={:.4f}".format(popt[1], popt[2]))
+    plt.savefig("residuals_hist.png")
+    plt.clf()
+
+
+
+    # config_test.n_total = 10000
+    # mv.validate(config_test)

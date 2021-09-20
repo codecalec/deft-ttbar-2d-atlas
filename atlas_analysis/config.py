@@ -1,7 +1,7 @@
+import itertools
+import json
 from pathlib import Path
 from typing import List, Union
-import json
-import itertools
 
 import numpy as np
 
@@ -160,7 +160,7 @@ def generate_json_three_op(
     predictions = [mc.tolist() for mc in MC_signal]
     output_dict["config"]["model"]["predictions"] = predictions
     output_dict["config"]["model"]["prior_limits"] = {
-        r"c_{t\phi}": [-5.0, 5.0],
+        r"c_{t\phi}": [-12.0, 6.0],
         "c_{tG}": [-5.0, 5.0],
         "c_{tq}^{8}": [-5.0, 5.0],
     }
@@ -202,8 +202,8 @@ def generate_json_ctg_ctq(
     predictions = [mc.tolist() for mc in MC_signal]
     output_dict["config"]["model"]["predictions"] = predictions
     output_dict["config"]["model"]["prior_limits"] = {
-        "c_{tG}": [-5.0, 5.0],
-        "c_{tq}^{8}": [-5.0, 5.0],
+        "c_{tG}": [-2.0, 2.0],
+        "c_{tq}^{8}": [-2.0, 2.0],
     }
 
     output_dict["config"]["model"]["inclusive_k_factor"] = k_factor

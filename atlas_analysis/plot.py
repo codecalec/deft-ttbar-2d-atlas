@@ -1,8 +1,8 @@
 from pathlib import Path
-from typing import List, Tuple, Union, Optional
+from typing import List, Optional, Tuple, Union
 
-import numpy as np
 import matplotlib.pyplot as plt
+import numpy as np
 from matplotlib import axes
 
 
@@ -15,6 +15,7 @@ def plot_comparison(
     bin_left: np.ndarray,
     bin_right: np.ndarray,
     label=None,
+    data_label="ATLAS data",
 ):
 
     centres = bin_left + (bin_right - bin_left) / 2
@@ -24,7 +25,7 @@ def plot_comparison(
         xerr=(bin_right - bin_left) / 2,
         yerr=error,
         fmt=".k",
-        label="ATLAS data",
+        label=data_label,
     )
     ax.stairs(
         mc,
@@ -86,6 +87,7 @@ def data_plot(
     other_hists: List[Tuple[np.ndarray, str]],
     filename: Optional[Union[str, Path]] = None,
     ratio: bool = False,
+    data_label="ATLAS data",
 ):
 
     bins_1 = [(0, 90), (90, 180), (180, 1000)]
@@ -102,7 +104,7 @@ def data_plot(
             sharex="col",
             gridspec_kw={"height_ratios": [3, 1]},
         )
-        ax1r.set_ylabel("Ratio")
+        ax1r.set_ylabel("Model/Data")
     else:
         fig, (ax1, ax2, ax3, ax4) = plt.subplots(1, 4, figsize=(9.5, 3.5), sharey=True)
     fig.subplots_adjust(hspace=0, wspace=0)
@@ -156,7 +158,7 @@ def data_plot(
         atlas_data[:3],
         yerr=atlas_err[:3],
         fmt=".k",
-        label="Atlas Data",
+        label=data_label,
     )
 
     ax2.errorbar(
@@ -211,13 +213,11 @@ def data_plot(
         )
 
         if ratio:
-            for axr in [ax1r, ax2r, ax3r, ax4r]:
-                axr.axhline(1.0, ls="-", color="k")
 
             ax1r.errorbar(
                 centres_1,
                 [1] * 3,
-                yerr=atlas_err[:3] / hist_data[:3],
+                yerr=atlas_err[:3] / atlas_data[:3],
                 linestyle="None",
                 fmt="k",
             )
@@ -232,7 +232,7 @@ def data_plot(
 
             ax1r.errorbar(
                 centres_1,
-                atlas_data[:3] / hist_data[:3],
+                hist_data[:3] / atlas_data[:3],
                 xerr=widths_1 / 2,
                 linestyle="None",
             )
@@ -240,13 +240,13 @@ def data_plot(
             ax2r.errorbar(
                 centres_2,
                 [1] * 4,
-                yerr=atlas_err[3:7] / hist_data[3:7],
+                yerr=atlas_err[3:7] / atlas_data[3:7],
                 linestyle="None",
                 fmt="k",
             )
             ax2r.errorbar(
                 centres_2,
-                atlas_data[3:7] / hist_data[3:7],
+                hist_data[3:7] / atlas_data[3:7],
                 xerr=widths_2 / 2,
                 linestyle="None",
             )
@@ -254,13 +254,13 @@ def data_plot(
             ax3r.errorbar(
                 centres_3,
                 [1] * 5,
-                yerr=atlas_err[7:12] / hist_data[7:12],
+                yerr=atlas_err[7:12] / atlas_data[7:12],
                 linestyle="None",
                 fmt="k",
             )
             ax3r.errorbar(
                 centres_3,
-                atlas_data[7:12] / hist_data[7:12],
+                hist_data[7:12] / atlas_data[7:12],
                 xerr=widths_3 / 2,
                 linestyle="None",
             )
@@ -268,16 +268,20 @@ def data_plot(
             ax4r.errorbar(
                 centres_4,
                 [1] * 3,
-                yerr=atlas_err[12:] / hist_data[12:],
+                yerr=atlas_err[12:] / atlas_data[12:],
                 linestyle="None",
                 fmt="k",
             )
             ax4r.errorbar(
                 centres_4,
-                atlas_data[12:] / hist_data[12:],
+                hist_data[12:] / atlas_data[12:],
                 xerr=widths_4 / 2,
                 linestyle="None",
             )
+
+            for axr in [ax1r, ax2r, ax3r, ax4r]:
+                axr.axhline(1.0, ls="--", color="grey")
+                axr.tick_params(axis='x', labelsize=8)
 
     fig.legend(bbox_to_anchor=(0.9, 0.8), loc="upper left")
     if filename:

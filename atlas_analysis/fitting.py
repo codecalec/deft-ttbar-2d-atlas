@@ -1,5 +1,5 @@
-from typing import Optional
 import itertools
+from typing import Optional
 
 import numpy as np
 from deft_hep import ConfigReader, PredictionBuilder
