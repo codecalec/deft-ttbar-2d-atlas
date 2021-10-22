@@ -1,17 +1,22 @@
-import logging
 import re
+import sys
 from pathlib import Path
 from typing import List
+import itertools
 
 import matplotlib.pyplot as plt
 import numpy as np
 from analysis import run_analysis, run_validation
+from analysis_1D import ctg_analysis_1D, ctg_ctq_analysis_1D
 from config import *
 from data import (
     NLO_TO_NNLO_k_factor,
     collect_MC_data,
+    collect_MC_data_1D,
     cov_matrix,
+    cov_matrix_mttbar,
     extract_data,
+    extract_data_mttbar,
     scale_variation,
     k_factor,
     verify_cov_matrix,
@@ -33,7 +38,9 @@ MC_PATH_CTG_CTQ = DATA_GEN_PATH / "atlas_ttbar_2D_ctg_ctq_big"
 MC_PATH_CTG_CTQ_VALID = DATA_GEN_PATH / "atlas_ttbar_2D_ctg_ctq_validation"
 
 MC_PATH_OP_COMPARISON = DATA_GEN_PATH / "atlas_ttbar_2D_single_op"
+
 MC_PATH_SM = DATA_GEN_PATH / "atlas_ttbar_2D_sm"
+MC_PATH_SM_1D = DATA_GEN_PATH / "atlas_ttbar_1D_sm"
 
 
 def operator_comparison(
@@ -96,11 +103,23 @@ def operator_comparison(
     # plt.show()
 
 
-def ctg_analysis(data_values, values_cov):
-    mc_files = sorted(MC_PATH_CTG.glob("run_0?_LO/MADatNLO.HwU"))
-    ctg_values = [-2.0, 0, 2.0, -1.0, 1.0]
-    bin_left, bin_right, mc_data = collect_MC_data(mc_files)
+def ctg_analysis(data_values, values_cov, scale_variance=1):
+    mc_files = list(MC_PATH_CTG_CTQ.glob(r"run_*_LO/MADatNLO.HwU"))
+    pattern = re.compile(r"run_(\d+)_LO")
+    order = {f: int(re.search(pattern, str(f)).group(1)) - 1 for f in mc_files}
+    mc_files = sorted(mc_files, key=lambda x: order[x])
 
+    assert len(mc_files) == 169
+    _, _, mc_data = collect_MC_data(mc_files)
+    mc_data = mc_data * scale_variance
+
+    mc_ctg_data = []
+    ctg_list = [-4, -3, -2, -1.5, -1, -0.5, 0, 0.5, 1, 1.5, 2, 3, 4]
+    ctq8_list = [-4, -3, -2, -1.5, -1, -0.5, 0, 0.5, 1, 1.5, 2, 3, 4]
+
+    for mc, (ctg, ctq8) in zip(mc_data, itertools.product(ctg_list, ctq8_list)):
+        if ctq8 == 0:
+            mc_ctg_data.append(mc)
     # fig = plt.figure(figsize=(10, 10))
     # axs = fig.subplots(2, 2)
     # indices = [(0, 3), (3, 7), (7, 12), (12, 15)]
@@ -156,14 +175,13 @@ def ctg_analysis(data_values, values_cov):
     # print(values_cov)
     # print(mc_data)
 
-
     values_cov = np.diag(np.diagonal(values_cov))
 
     generate_json_ctg(
-        data_values, values_cov, mc_data, ctg_values, Path("atlas_2D.json")
+        data_values, values_cov, mc_ctg_data, ctg_list, Path("atlas_2D.json")
     )
     run_analysis(Path("atlas_2D.json"))
-    # run_validation(Path("atlas_2D.json"), Path("test_atlas_2D.json"))
+    # run_validation(Path("atlas_2D.json"), Path("atlas_2D.json"))
 
 
 def multiple_analysis(data, covariance):
@@ -206,7 +224,7 @@ def three_op_analysis(data, covariance):
     k = 1
 
     # indices = [12,13,14]
-    indices = [0,1,2,3,4,5,6,7,8,9,10,11,12,13,14]
+    indices = [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14]
     # indices = [6,10,11,12,13,14]
     # When no 6, double solution
     # indices = [7, 8, 9, 10, 11, 12, 13, 14]
@@ -238,7 +256,9 @@ def three_op_analysis(data, covariance):
     ctg_values = [-1.5, -0.5, 0.5, 1.5]
     ctq8_values = [-1.5, -0.5, 0.5, 1.5]
 
-    validation_files = sorted(MC_PATH_THREE_OP_VALID.glob("run_??_LO/MADatNLO.HwU"))
+    validation_files = sorted(
+        MC_PATH_THREE_OP_VALID.glob("run_??_LO/MADatNLO.HwU")
+    )
     assert len(validation_files) == 64
     _, _, valid_data = collect_MC_data(validation_files)
 
@@ -262,10 +282,10 @@ def ctg_ctq_analysis(data, covariance, scale_variance=1):
     # pattern = re.compile(r"run_(\d+)_LO")
 
     # mc_files = sorted(
-        # filter(
-            # lambda f: int(re.search(pattern, str(f)).group(1)) in range(51, 76),
-            # mc_files,
-        # )
+    # filter(
+    # lambda f: int(re.search(pattern, str(f)).group(1)) in range(51, 76),
+    # mc_files,
+    # )
     # )
 
     mc_files = list(MC_PATH_CTG_CTQ.glob(r"run_*_LO/MADatNLO.HwU"))
@@ -276,20 +296,35 @@ def ctg_ctq_analysis(data, covariance, scale_variance=1):
     assert len(mc_files) == 169
     _, _, mc_data = collect_MC_data(mc_files)
 
-    indices = [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14]
-    data = data[indices]
-    covariance = covariance[indices][:, indices]
-    mc_data = [a[indices] for a in mc_data]
-    covariance = np.diag(np.diagonal(covariance))
+    # plt.plot(range(len(mc_data[0])), mc_data[0] / k_factor)
+    # plt.plot(range(len(mc_data[0])), data)
+    # plt.show()
+
+    # data_plot(
+        # data,
+        # covariance,
+        # other_hists=[
+            # (mc_data[84] / k_factor, "LO"),
+            # (mc_data[84] / NLO_TO_NNLO_k_factor, "NLO"),
+            # (mc_data[84], "NNLO")
+            # ],
+        # filename="images/k_factor.png"
+    # )
+
+    # indices = [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14]
+    # data = data[indices]
+    # covariance = covariance[indices][:, indices]
+    # mc_data = [a[indices] for a in mc_data]
+    # covariance = np.diag(np.diagonal(covariance))
 
     ctg_list = [-4, -3, -2, -1.5, -1, -0.5, 0, 0.5, 1, 1.5, 2, 3, 4]
     ctq8_list = [-4, -3, -2, -1.5, -1, -0.5, 0, 0.5, 1, 1.5, 2, 3, 4]
 
     filename = Path("atlas_2D_ctg_ctq.json")
     # if (scale_variance > 1.0).any() :
-        # filename = Path("atlas_2D_ctg_ctq_higher.json")
+    # filename = Path("atlas_2D_ctg_ctq_higher.json")
     # elif (scale_variance < 1.0).any() :
-        # filename = Path("atlas_2D_ctg_ctq_lower.json")
+    # filename = Path("atlas_2D_ctg_ctq_lower.json")
     mc_data = mc_data * scale_variance
     # mc_data = [a * scale_variance for a in mc_data]
 
@@ -304,17 +339,43 @@ def ctg_ctq_analysis(data, covariance, scale_variance=1):
     )
     run_analysis(filename)
 
-    ctg_values = [-2.5, -1.75, -1.25, -0.75, -0.25, 0.25, 0.75, 1.25, 1.75, 2.5]
-    ctq8_values = [-2.5, -1.75, -1.25, -0.75, -0.25, 0.25, 0.75, 1.25, 1.75, 2.5]
+    ctg_values = [
+        -2.5,
+        -1.75,
+        -1.25,
+        -0.75,
+        -0.25,
+        0.25,
+        0.75,
+        1.25,
+        1.75,
+        2.5,
+    ]
+    ctq8_values = [
+        -2.5,
+        -1.75,
+        -1.25,
+        -0.75,
+        -0.25,
+        0.25,
+        0.75,
+        1.25,
+        1.75,
+        2.5,
+    ]
 
-
-    validation_files = list(MC_PATH_CTG_CTQ_VALID.glob("run_*_LO/MADatNLO.HwU"))
+    validation_files = list(
+        MC_PATH_CTG_CTQ_VALID.glob("run_*_LO/MADatNLO.HwU")
+    )
     assert len(validation_files) == 100
-    order = {f: int(re.search(pattern, str(f)).group(1)) - 1 for f in validation_files}
+    order = {
+        f: int(re.search(pattern, str(f)).group(1)) - 1
+        for f in validation_files
+    }
     validation_files = sorted(validation_files, key=lambda x: order[x])
 
     _, _, valid_data = collect_MC_data(validation_files)
-    valid_data = [a[indices] for a in valid_data]
+    # valid_data = [a[indices] for a in valid_data]
 
     generate_json_ctg_ctq(
         data,
@@ -325,48 +386,97 @@ def ctg_ctq_analysis(data, covariance, scale_variance=1):
         ctq8_list=ctq8_values,
         filename=Path("atlas_2D_ctg_ctq_test.json"),
     )
-    run_validation(Path("atlas_2D_ctg_ctq.json"), Path("atlas_2D_ctg_ctq_test.json"))
+    run_validation(
+        Path("atlas_2D_ctg_ctq.json"), Path("atlas_2D_ctg_ctq_test.json")
+    )
 
 
 if __name__ == "__main__":
 
-    logging.basicConfig(filename="analysis.log", encoding="utf-8", level=logging.DEBUG)
-    mpl_logger = logging.getLogger("matplotlib.texmanager")
-    mpl_logger.setLevel(logging.WARNING)
-    mpl_logger = logging.getLogger("matplotlib.dviread")
-    mpl_logger.setLevel(logging.WARNING)
+    if "-1" in sys.argv:
+        data = extract_data_mttbar(DATA_PATH / "Table619.csv")
+        covariance = cov_matrix_mttbar(DATA_PATH / "Table620.csv")
 
-    data_files = [DATA_PATH / f"Table70{i}.csv" for i in range(1, 5)]
-    assert len(data_files) == 4
-    data_values = np.array([])
-    for f in data_files:
-        data_values = np.append(data_values, extract_data(f))
+        variance = np.diagonal(covariance)
+        correlation = [[covariance[i][j]/np.sqrt(variance[i] * variance[j]) for i in range(len(variance))] for j in range(len(variance))]
+        print(correlation)
+        plt.imshow(correlation)
+        plt.xticks(np.arange(len(correlation)))
+        plt.yticks(np.arange(len(correlation)))
+        cbar = plt.colorbar()
+        cbar.ax.set_ylabel("Correlation", rotation=-90, va="bottom")
+        plt.ylabel("Bin Index")
+        plt.xlabel("Bin Index")
+        plt.savefig("correlation.png")
+        plt.show()
 
-    logging.debug(f"Data Values:\n{data_values}\n{data_values.shape}")
+        sm_path = MC_PATH_SM_1D / "run_01" / "MADatNLO.HwU"
+        scale = 1
+        print("Scale Variance: ", end = "")
+        if "--scale=lower" in sys.argv:
+            scale = 1 - scale_variation(sm_path)
+            print("Lower")
+        elif "--scale=upper" in sys.argv:
+            print("Upper")
+            scale = 1 + scale_variation(sm_path)
+        else:
+            print("No scale variance")
 
-    cov_files = [
-        DATA_PATH / f"Table70{i}.csv" if i < 10 else DATA_PATH / f"Table7{i}.csv"
-        for i in range(5, 15)
-    ]
-    assert len(cov_files) == 10, f"Supplied {len(cov_files)} files"
-    values_cov = cov_matrix(cov_files)
+        if "--num=1" in sys.argv:
+            ctg_analysis_1D(data, covariance, scale_variance=scale)
+        if "--num=2" in sys.argv:
+            ctg_ctq_analysis_1D(data, covariance, scale_variance=scale)
 
-    logging.debug(f"Covariance Matrix:\n{values_cov}\n{values_cov.shape}")
+    elif "-2" in sys.argv:
 
-    sm_path = MC_PATH_SM / "run_01_LO" / "MADatNLO.HwU"
-    scale_lower = 1 - scale_variation(sm_path)
-    scale_upper = 1 + scale_variation(sm_path)
+        data_files = [DATA_PATH / f"Table70{i}.csv" for i in range(1, 5)]
+        assert len(data_files) == 4
+        data_values = np.array([])
+        for f in data_files:
+            data_values = np.append(data_values, extract_data(f))
 
-    ctg_ctq_analysis(data_values, values_cov, scale_variance=scale_upper)
+        cov_files = [
+            DATA_PATH / f"Table70{i}.csv"
+            if i < 10
+            else DATA_PATH / f"Table7{i}.csv"
+            for i in range(5, 15)
+        ]
+        assert len(cov_files) == 10, f"Supplied {len(cov_files)} files"
+        values_cov = cov_matrix(cov_files)
 
-    # result = verify_cov_matrix(values_cov)
+        variance = np.diagonal(values_cov)
+        correlation = [[values_cov[i][j]/np.sqrt(variance[i] * variance[j]) for i in range(len(variance))] for j in range(len(variance))]
+        print(correlation)
+        plt.imshow(correlation)
+        plt.xticks(np.arange(len(correlation)))
+        plt.yticks(np.arange(len(correlation)))
+        cbar = plt.colorbar()
+        cbar.ax.set_ylabel("Correlation", rotation=-90, va="bottom")
+        plt.ylabel("Bin Index")
+        plt.xlabel("Bin Index")
+        plt.show()
 
-    # print(result[:3][:,:3])
-    # print(result[3:7][:,3:7])
-    # print(result[7:12][:,7:12])
-    # print(result[12:][:,12:])
+        # sm_path = MC_PATH_SM / "run_01_LO" / "MADatNLO.HwU"
+        sm_path = MC_PATH_SM / "run_01" / "MADatNLO.HwU"
+        scale = 1
+        print("Scale Variance: ", end = "")
+        if "--scale=lower" in sys.argv:
+            scale = 1 - scale_variation(sm_path)
+            print("Lower")
+        elif "--scale=upper" in sys.argv:
+            print("Upper")
+            scale = 1 + scale_variation(sm_path)
+        else:
+            print("No scale variance")
 
-    # three_op_analysis(data_values, values_cov)
+        if "--num=1" in sys.argv:
+            ctg_analysis(data_values, values_cov, scale_variance=scale)
+        if "--num=2" in sys.argv:
+            ctg_ctq_analysis(data_values, values_cov, scale_variance=scale)
+        if "--num=3" in sys.argv:
+            three_op_analysis(data_values, values_cov)
+    else:
+        print("No analysis to run: give -1 or -2 flag")
 
     # multiple_analysis(data_values, values_cov)
 
@@ -380,5 +490,5 @@ if __name__ == "__main__":
 
     # sm_path = list(MC_PATH_SM.glob("run_??_LO/MADatNLO.HwU"))[0]
     # operator_comparison(
-        # sm_path, ctp_paths, ctg_paths, ctq_paths, data_values, values_cov
+    # sm_path, ctp_paths, ctg_paths, ctq_paths, data_values, values_cov
     # )

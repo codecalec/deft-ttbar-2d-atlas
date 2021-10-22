@@ -12,15 +12,24 @@ NLO_PATH = Path(
     "/home/agv/Documents/Honours_Project/data_generation/atlas_ttbar_2D_sm/run_01/MADatNLO.HwU"
 )
 
+LO_1D_PATH = Path(
+    "/home/agv/Documents/Honours_Project/data_generation/atlas_ttbar_1D_sm/run_01_LO/MADatNLO.HwU"
+)
+NLO_1D_PATH = Path(
+    "/home/agv/Documents/Honours_Project/data_generation/atlas_ttbar_1D_sm/run_01/MADatNLO.HwU"
+)
+
+
 NLO_XSEC = 6.741e2  #  +- 0.023e2 from https://arxiv.org/abs/1405.0301
 NNLO_XSEC = 831.76  # from https://twiki.cern.ch/twiki/bin/view/LHCPhysics/TtbarNNLO
 NLO_TO_NNLO_k_factor = NNLO_XSEC / NLO_XSEC
 
 
-def _per_bin_k_factor(LO_path: Path, NLO_path: Path):
+def _per_bin_k_factor(LO_path: Path, NLO_path: Path, num_hist: int = 15):
 
-    _, _, LO_values = convert_hwu_to_numpy(LO_path, 15)
-    _, _, NLO_values = convert_hwu_to_numpy(NLO_path, 15)
+    _, _, LO_values = convert_hwu_to_numpy(LO_path, num_hist)
+    _, _, NLO_values = convert_hwu_to_numpy(NLO_path, num_hist)
+    assert len(LO_values) == num_hist
 
     k = NLO_values / LO_values
 
@@ -28,25 +37,27 @@ def _per_bin_k_factor(LO_path: Path, NLO_path: Path):
 
 
 k_factor = _per_bin_k_factor(LO_PATH, NLO_PATH) * NLO_TO_NNLO_k_factor
+k_factor_1D = _per_bin_k_factor(LO_1D_PATH, NLO_1D_PATH, 9) * NLO_TO_NNLO_k_factor
 
 
-def scale_variation(file: Path, verbose:bool = False):
+def scale_variation(file: Path, verbose: bool = False):
     values = []
 
     with open(file, "r") as f:
         lines = f.readlines()
         for i, line in enumerate(lines):
             if "<histogram>" in line:
-                hist_info = lines[i+1].strip().split()
+                hist_info = lines[i + 1].strip().split()
                 dy = float(hist_info[3])
                 central = float(hist_info[2])
-                variation =  (dy / 2) / central
-                assert variation < 1.
+                variation = (dy / 2) / central
+                assert variation < 1.0
                 values.append(variation)
     if verbose:
         print(f"Scale variation from {file}")
         print(values)
     return np.array(values)
+
 
 def collect_MC_data(
     files: List[Path],
@@ -67,7 +78,7 @@ def collect_MC_data(
     return bin_left, bin_right, mc_data
 
 
-def extract_data(filename: Path) -> np.array:
+def extract_data(filename: Path) -> np.ndarray:
 
     values = []
     with filename.open() as f:
@@ -181,3 +192,28 @@ def verify_cov_matrix(cov: np.ndarray) -> np.ndarray:
     for (i, err_i), (j, err_j) in product(enumerate(err), enumerate(err)):
         result[i, j] = cov[i, j] / (err_i * err_j)
     return result
+
+
+def collect_MC_data_1D(
+    files: List[Path],
+) -> Tuple[np.ndarray, np.ndarray, List[np.ndarray]]:
+
+    if not files:
+        raise Exception("No files available")
+
+    mc_data = []
+    for f in files:
+        bin_left, bin_right, values = convert_hwu_to_numpy(f, 9)
+
+        scaled_values = values / (bin_right - bin_left) * k_factor_1D
+
+        mc_data.append(scaled_values)
+    return bin_left, bin_right, mc_data
+
+
+def extract_data_mttbar(filename: Path) -> np.ndarray:
+    return np.loadtxt(filename, delimiter=",", skiprows=23)[:, 4]
+
+
+def cov_matrix_mttbar(filename: Path) -> np.ndarray:
+    return np.loadtxt(filename, delimiter=",", skiprows=10)[:, 6].reshape((9, 9))

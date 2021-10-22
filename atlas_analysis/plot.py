@@ -37,7 +37,7 @@ def plot_comparison(
     if label:
         ax.plot([], [], "", label=f"{label}")
 
-    ax.set_xlabel(r"$p_t^{T}$ [GeV]")
+    ax.set_xlabel(r"$p_T^{t}$ [GeV]")
     ax.set_ylabel(r"$d\sigma/d m_{ttbar}$")
     ax.legend()
 
@@ -81,6 +81,83 @@ def plot_comparison_multiple_operator(
     ax.legend()
 
 
+def data_plot_1D(
+    atlas_data: np.ndarray,
+    atlas_cov: np.ndarray,
+    other_hists: List[Tuple[np.ndarray, str]],
+    filename: Optional[Union[str, Path]] = None,
+    data_label="ATLAS data",
+):
+
+    bins = [325, 400, 480, 580, 700, 860, 1020, 1250, 1500, 2000]
+    bins = [(i, j) for i, j in zip(bins[:-1], bins[1:])]
+
+    atlas_err = np.sqrt(np.diag(atlas_cov))
+
+    widths = np.array([(j - i) for (i, j) in bins])
+
+    centres = [left + width / 2 for (left, _), width in zip(bins, widths)]
+
+    fig, (ax, axr) = plt.subplots(
+        2,
+        1,
+        figsize=(5, 3.5),
+        sharey="row",
+        sharex="col",
+        gridspec_kw={"height_ratios": [3, 1]},
+    )
+    ax.set_yscale("log")
+    axr.set_ylabel("Model/Data")
+
+    fig.subplots_adjust(hspace=0, wspace=0)
+    fig.supxlabel("$p_{T}^{t}$ [GeV]")
+    ax.set_title(r"$\bf{dEFT}$", loc="left")
+    ax.set_title(r"$\sqrt{s}=13\mathrm{TeV}, 36.1\mathrm{fb}^{-1}$", loc="right")
+    ax.set_ylabel(
+        r"$\mathrm{d} \sigma / \mathrm{d}m_{t\bar{t}}$ [pb/GeV]",
+        loc="top",
+    )
+    ax.errorbar(
+        centres,
+        atlas_data,
+        yerr=atlas_err,
+        fmt=".k",
+        label=data_label,
+    )
+
+    for hist_data, label in other_hists:
+        ax.errorbar(
+            centres,
+            hist_data,
+            xerr=widths / 2,
+            linestyle="None",
+            label=label,
+        )
+
+        axr.errorbar(
+            centres,
+            hist_data / atlas_data,
+            xerr=widths / 2,
+            linestyle="None",
+        )
+
+    axr.errorbar(
+        centres,
+        [1] * len(atlas_data),
+        yerr=atlas_err / atlas_data,
+        linestyle="None",
+        fmt="k",
+    )
+    axr.axhline(1.0, ls="--", color="grey")
+
+    fig.legend(bbox_to_anchor=(0.9, 0.8), loc="upper left")
+    if filename:
+        plt.savefig(filename, bbox_inches="tight")
+    else:
+        plt.savefig("data_plot.png", bbox_inches="tight")
+    plt.clf()
+
+
 def data_plot(
     atlas_data: np.ndarray,
     atlas_cov: np.ndarray,
@@ -122,7 +199,7 @@ def data_plot(
         r"$\mathrm{d}^2 \sigma / \mathrm{d}p_{T}^{t} \mathrm{d}m_{t\bar{t}}$ [pb/GeV$^{2}$]",
         loc="top",
     )
-    fig.supxlabel("$p_{t}^{T}$ [GeV]")
+    fig.supxlabel("$p_{T}^{t}$ [GeV]")
 
     mttbar_labels = [("325", "500"), ("500", "700"), ("700", "1000"), ("1000", "2000")]
     for ax, (low, high) in zip([ax1, ax2, ax3, ax4], mttbar_labels):
@@ -281,7 +358,7 @@ def data_plot(
 
             for axr in [ax1r, ax2r, ax3r, ax4r]:
                 axr.axhline(1.0, ls="--", color="grey")
-                axr.tick_params(axis='x', labelsize=8)
+                axr.tick_params(axis="x", labelsize=8)
 
     fig.legend(bbox_to_anchor=(0.9, 0.8), loc="upper left")
     if filename:

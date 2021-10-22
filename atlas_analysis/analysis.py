@@ -7,7 +7,7 @@ import deft_hep as deft
 import matplotlib.pyplot as plt
 import numpy as np
 from fitting import find_minimum, min_func
-from plot import data_plot  # , grid_plot
+from plot import data_plot, data_plot_1D  # , grid_plot
 
 
 def ln_prob(
@@ -64,7 +64,9 @@ def grid_minimise(config: deft.ConfigReader, pb: deft.PredictionBuilder):
     plt.clf()
 
 
-def run_analysis(config_name: Union[str, Path], closure: bool = False):
+def run_analysis(
+    config_name: Union[str, Path], closure: bool = False, is1D: bool = False
+):
     # avoid numpy parallelization
     os.environ["OMP_NUM_THREADS"] = "1"
 
@@ -86,9 +88,7 @@ def run_analysis(config_name: Union[str, Path], closure: bool = False):
             use_multiprocessing=False,
         )
         sampler_closure = fitter_closure.sampler
-        mcmc_params_closure = np.mean(
-            sampler_closure.get_chain(flat=True), axis=0
-        )
+        mcmc_params_closure = np.mean(sampler_closure.get_chain(flat=True), axis=0)
         mcmc_params_cov_closure = np.atleast_1d(
             np.cov(np.transpose(sampler_closure.get_chain(flat=True)))
         )
@@ -123,9 +123,7 @@ def run_analysis(config_name: Union[str, Path], closure: bool = False):
     sampler = fitter.sampler
 
     print(
-        "Mean acceptance fraction: {0:.3f}".format(
-            np.mean(sampler.acceptance_fraction)
-        )
+        "Mean acceptance fraction: {0:.3f}".format(np.mean(sampler.acceptance_fraction))
     )
     print(
         "Mean autocorrelation time: {0:.3f} steps".format(
@@ -134,9 +132,7 @@ def run_analysis(config_name: Union[str, Path], closure: bool = False):
     )
 
     mcmc_params = np.mean(sampler.get_chain(flat=True), axis=0)
-    mcmc_params_cov = np.atleast_1d(
-        np.cov(np.transpose(sampler.get_chain(flat=True)))
-    )
+    mcmc_params_cov = np.atleast_1d(np.cov(np.transpose(sampler.get_chain(flat=True))))
     mcmc_params_error = (
         np.sqrt(np.diag(mcmc_params_cov))
         if len(mcmc_params_cov) != 1
@@ -150,9 +146,8 @@ def run_analysis(config_name: Union[str, Path], closure: bool = False):
     icov = np.linalg.inv(config.cov)
 
     predictions = pb.make_prediction(mcmc_params)
-    pred_zero_loc = config.samples.tolist().index(
-        [1.0] + [0.0] * (len(mcmc_params))
-    )
+    print(config.samples.tolist())
+    pred_zero_loc = config.samples.tolist().index([1.0] + [0.0] * (len(mcmc_params)))
     pred_zero = config.predictions[pred_zero_loc]
     # pb.make_prediction([0.0 for _ in range(len(mcmc_params))])
 
@@ -183,23 +178,31 @@ def run_analysis(config_name: Union[str, Path], closure: bool = False):
     sp.corner(show_plot=False)
 
     model_label = "Model Pred.\n" + "\n".join(
-        [
-            "{}={:.2f}".format(l, p)
-            for l, p in zip(config.tex_labels, mcmc_params)
-        ]
+        ["{}={:.2f}".format(l, p) for l, p in zip(config.tex_labels, mcmc_params)]
     )
-    config.tex_labels
 
-    data_plot(
-        config.data,
-        np.array(config.cov),
-        [
-            (predictions, model_label),
-            (pred_zero, f"SM Pred."),
-        ],
-        filename="ATLAS_model_result.png",
-        ratio=True,
-    )
+    if is1D:
+        data_plot_1D(
+            config.data,
+            np.array(config.cov),
+            [
+                (predictions, model_label),
+                (pred_zero, f"SM Pred."),
+            ],
+            filename="ATLAS_model_result.png",
+        )
+
+    else:
+        data_plot(
+            config.data,
+            np.array(config.cov),
+            [
+                (predictions, model_label),
+                (pred_zero, f"SM Pred."),
+            ],
+            filename="ATLAS_model_result.png",
+            ratio=True,
+        )
 
 
 def run_validation(config_name, test_name):
@@ -265,6 +268,8 @@ def run_validation(config_name, test_name):
         score.std() / len(predictions[0]),
     )
 
+    print("Mean:", np.mean(res_avg), "Std:", np.std(res_avg))
+
     from scipy.optimize import curve_fit
 
     gaus_func = (
@@ -274,23 +279,23 @@ def run_validation(config_name, test_name):
     )
     hist, edges = np.histogram(res_avg, bins=11, range=(-0.06, 0.06))
     centres = (edges[1:] + edges[:-1]) / 2
-    p0 = [1, 0, 0.1]
-    popt, pcov = curve_fit(f=gaus_func, xdata=centres, ydata=hist, p0=p0)
-    print(popt, pcov)
+    p0 = [1, 0, 1]
+    fit_hist = hist[hist != 0]
+    fit_centres = centres[hist != 0]
+    popt, pcov = curve_fit(f=gaus_func, xdata=fit_centres, ydata=fit_hist, p0=p0, sigma=np.sqrt(fit_hist))
+    print("Fit results:", popt, pcov)
     print(np.sqrt(np.diag(pcov)))
 
-    fig = plt.figure(figsize=(3, 4))
+    fig = plt.figure(figsize=(3, 3))
     ax = fig.gca()
     x = np.linspace(-0.06, 0.06, 100)
     ax.hist(res_avg, bins=11, range=(-0.06, 0.06))
-    ax.plot(x, gaus_func(x,*popt), "--k")
-    ax.set_xlabel("Avg. Residuals")
+    ax.plot(x, gaus_func(x, *popt), "--k")
+    ax.set_xlabel("Avg. Relative Residuals")
     ax.set_ylabel("Num. Valid. tests")
-    ax.text(-0.05, 25, "Mean={:.4f}\nStd={:.4f}".format(popt[1], popt[2]))
+    ax.text(-0.06, 25, "Mean={:.4f}\nStd={:.4f}".format(popt[1], popt[2]))
     plt.savefig("residuals_hist.png")
     plt.clf()
-
-
 
     # config_test.n_total = 10000
     # mv.validate(config_test)
